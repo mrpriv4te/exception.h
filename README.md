@@ -1,342 +1,243 @@
-# 📦 Exception Handling Library for C
+# exception.h
 
-**A robust and thread-safe exception handling library for C**, inspired by modern programming languages. This library provides `try`, `catch`, and `throw` macros for structured error handling in both single-threaded and multi-threaded applications.
+Header-only exception handling library for C.
 
----
+Implements structured `try` / `catch` / `throw` semantics on top of `setjmp` / `longjmp`, with:
 
-## 🌟 Features
-
-- **Structured Exception Handling**: Familiar `try`, `catch`, and `throw` constructs.
-- **Thread Safety**: Isolates exceptions across threads with thread-local storage.
-- **Custom Messages**: Supports `printf`-style formatted messages for exceptions.
-- **Nested Exception Propagation**: Handle exceptions across function call levels.
-- **Integrated with Modern Tools**: Leverages `.clang-format` and `.clangd` for code consistency and tooling.
+* Thread-local exception state
+* Nested exception propagation
+* Formatted exception messages
+* Deterministic termination on uncaught exceptions
+* Cross-platform support (POSIX + Windows)
 
 ---
 
-## 🏗️ Project Structure
+## Features
 
-```bash
-.
-├── CMakeLists.txt # Main CMake configuration
-├── include/
-│    └── exception.h # Library header
-├── README.md # Project documentation
-├── src/
-│    └── exception.c # Library source
-└── tests/
-      ├── CMakeLists.txt # CMake configuration for tests
-      └── exception_tests.c # Unit tests for the library
+* Header-only (single `exception.h` file)
+* C-only (explicitly rejects C++)
+* Per-thread exception state (`_Thread_local` / `__thread` / `__declspec(thread)`)
+* Nested `try` blocks
+* Rethrow support
+* Formatted messages via `printf`-style formatting
+* Automatic cleanup at program exit
+* Safe behavior for uncaught exceptions:
+
+  * Main thread: prints error and exits with exception code
+  * Worker thread: prints error and terminates the thread with exception code
+
+---
+
+## Installation
+
+Copy `exception.h` into your project.
+
+In **one** translation unit, define:
+
+```c
+#define EXCEPTION_IMPLEMENTATION
+#include "exception.h"
+```
+
+In all other translation units:
+
+```c
+#include "exception.h"
 ```
 
 ---
 
-## 🚀 Installation
-
-### Prerequisites
-
-- **CMake** (version 3.15 or newer)
-- **GCC/Clang** (with C11 support)
-- **CMocka** (optional, for testing)
-
-### Build Instructions
-
-1. Clone the Repository:
-
-   ```bash
-   git clone https://github.com/mrpriv4te/exception-c.git
-   cd exception-c
-   ```
-
-2. Create a Build Directory:
-
-   ```bash
-   mkdir build && cd build
-   ```
-
-3. Configure the Project:
-
-   ```bash
-   cmake ..
-   ```
-
-4. Build the Library:
-   ```bash
-   cmake --build .
-   ```
-
-### Run the Tests (Optional)
-
-1. Enable Testing During Configuration:
-
-   ```bash
-   cmake -DBUILD_TESTING=ON ..
-   ```
-
-2. Build and Execute the Tests:
-   ```bash
-   cmake --build . && ctest
-   ```
-
----
-
-## 🛠️ Integrating the Library into Your Project
-
-### Option 1: Install and Link the Library
-
-1. **Install the Library** (from the build directory):
-
-   ```bash
-   cmake --install .
-   ```
-
-2. **Update Your Project’s `CMakeLists.txt`**:
-
-   ```cmake
-   cmake_minimum_required(VERSION 3.15)
-   project(YourProject LANGUAGES C)
-
-   # Find and link the exception library
-
-   find_package(ExceptionLibrary CONFIG REQUIRED)
-
-   add_executable(your_project main.c)
-   target_link_libraries(your_project PRIVATE exception)
-   target_include_directories(your_project PRIVATE ${CMAKE_INSTALL_PREFIX}/include)
-   ```
-
-### Option 2: Add the Source Directly
-
-1. **Copy the `src/` and `include/` Directories** into your project directory.
-
-2. **Update Your Project’s `CMakeLists.txt`**:
-
-   ```cmake
-   cmake_minimum_required(VERSION 3.15)
-   project(YourProject LANGUAGES C)
-
-   # Add the exception library
-
-   add_library(exception path/to/src/exception.c)
-   target_include_directories(exception PUBLIC path/to/include)
-
-   add_executable(your_project main.c)
-   target_link_libraries(your_project PRIVATE exception)
-   ```
-
-### Option 3: Add as a Submodule
-
-1. **Add the Submodule**:
-
-   ```bash
-   git submodule add https://github.com/mrpriv4te/exception-c.git libs/exception
-   ```
-
-2. **Update Your Project’s `CMakeLists.txt`**:
-
-   ```cmake
-   cmake_minimum_required(VERSION 3.15)
-   project(YourProject LANGUAGES C)
-
-   # Add the exception library as a subdirectory
-
-   add_subdirectory(libs/exception)
-
-   add_executable(your_project main.c)
-   target_link_libraries(your_project PRIVATE exception)
-   ```
-
----
-
-## 📖 Usage
-
-### 📝 Basic Example
+## Basic Usage
 
 ```c
 #include "exception.h"
-#include <stdlib.h>
-#include <stdio.h>
 
-int main() {
-    try({
-        throw(1, "An error occurred: %s", "example message");
-    } catch(1) {
-        printf("Caught exception: %s\n", exception()->message);
-    })
-
-    try({
-        int rand_exception_code = rand();
-        throw(rand_exception_code, "An other error occurred: %s", "example message");
-    } catch(all_exception) {
-        printf("Caught exception: %s with rand code %d\n", exception()->message, exception()->code);
-    })
-
-    return 0;
-}
-```
-
-### 🔀 Multithreading Example
-
-```c
-#include "exception.h"
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-void *thread_function(void *arg) {
-    int thread_id = *(int *)arg;
-
-    try({
-        if (thread_id % 2 == 0) {
-            throw(100 + thread_id, "Thread %d exception", thread_id);
-        }
-    } catch(100 + thread_id) {
-        printf("Caught exception in thread %d: %s\n", thread_id, exception()->message);
-    })
-
-    pthread_exit(NULL);
-}
-
-int main() {
-    const int num_threads = 4;
-    pthread_t threads[num_threads];
-    int thread_ids[num_threads];
-
-    for (int i = 0; i < num_threads; i++) {
-        thread_ids[i] = i;
-        pthread_create(&threads[i], NULL, thread_function, &thread_ids[i]);
+int main(void)
+{
+    try {
+        throw(1, "Something went wrong: %d", 42);
     }
-
-    for (int i = 0; i < num_threads; i++) {
-        pthread_join(threads[i], NULL);
+    catch (1) {
+        printf("Caught: %s (code %d)\n",
+               exception()->message,
+               exception()->code);
     }
 
     return 0;
 }
 ```
 
----
+### Semantics
 
-## ✅ Testing
+* `throw(code, fmt, ...)`
 
-The project includes unit tests written with [CMocka](https://cmocka.org/) that validate:
+  * `code` must be non-zero.
+  * Formats and stores the message.
+  * Transfers control to the nearest enclosing `try`.
 
-- **Basic exception handling**
-- **Nested function call propagation**
-- **Multithreading with caught and uncaught exceptions**
-- **Thread safety across multiple scenarios**
+* `catch(code)`
 
-### Run the Tests
+  * Executes if the thrown code matches.
+  * Use `EXCEPTION_ALL` to catch any code.
 
-1. Enable Testing in CMake:
+* `rethrow()`
 
-   ```bash
-   cmake -DBUILD_TESTING=ON ..
-   ```
+  * Propagates the current exception to the next outer `try`.
 
-2. Build and Execute Tests:
+* `exception()`
 
-   ```bash
-   cmake --build . && ctest -V
-   ```
-
-Example output:
-
-```
-...
-test 1
-    Start 1: ExceptionTests
-
-1: Test command: /path/to/exception-c/build/tests/exception_tests
-1: Working Directory: /path/to/exception-c/build/tests
-1: Test timeout computed to be: 10000000
-1: [==========] tests: Running 7 test(s).
-1: [ RUN      ] test_throw_and_catch
-1: [       OK ] test_throw_and_catch
-1: [ RUN      ] test_throw_uncaught
-1: exception_tests: /path/to/exception-c/tests/exception_tests.c:41: test_throw_uncaught(): Uncaught exception (code 2)
-1: [       OK ] test_throw_uncaught
-1: [ RUN      ] test_message_update
-1: [       OK ] test_message_update
-1: [ RUN      ] test_nested_function_call
-1: [       OK ] test_nested_function_call
-1: [ RUN      ] test_multithreaded_exceptions
-1: [       OK ] test_multithreaded_exceptions
-1: [ RUN      ] test_multithreaded_exceptions_uncaught
-1: exception_tests: Thread 126242628044480: /path/to/exception-c/tests/exception_tests.c:130: thread_function_uncaught(): Thread 0 uncaught exception (code 50)
-1: exception_tests: Thread 126242649016000: /path/to/exception-c/tests/exception_tests.c:130: thread_function_uncaught(): Thread 2 uncaught exception (code 52)
-1: [       OK ] test_multithreaded_exceptions_uncaught
-1: [ RUN      ] test_thread_safety
-1: [       OK ] test_thread_safety
-1: [==========] tests: 7 test(s) run.
-1: [  PASSED  ] 7 test(s).
-1/1 Test #1: ExceptionTests ...................   Passed    0.00 sec
-
-100% tests passed, 0 tests failed out of 1
-
-Total Test time (real) =   0.01 sec
-```
+  * Returns a pointer to the current `exception_t`.
 
 ---
 
-## 🛠️ Code Formatting and Tooling
+## Uncaught Exceptions
 
-- **.clang-format**: Ensures consistent code style across the project. Based on LLVM style.
-- **.clangd**: Provides IDE tooling for code navigation, autocompletion, and diagnostics.
+If no matching `catch` is found:
 
-### Apply Formatting
+* On the **main thread**:
 
-To format the source files:
+  * Error is printed to `stderr`
+  * Process exits with the exception code
+
+* On a **worker thread**:
+
+  * Error is printed to `stderr`
+  * Thread exits with the exception code
+
+In debug builds (when `NDEBUG` is not defined), diagnostics include:
+
+* File
+* Line
+* Function name
+
+In release builds, only the message and code are printed.
+
+---
+
+## Nested Exceptions
+
+Nested calls work transparently:
+
+```c
+void inner(void) {
+    throw(5, "Inner failure");
+}
+
+void outer(void) {
+    try {
+        inner();
+    }
+    catch (5) {
+        throw(6, "Outer transformed failure");
+    }
+}
+```
+
+---
+
+## Thread Safety
+
+The library maintains exception state per thread using thread-local storage.
+
+Each thread has:
+
+* Independent exception code
+* Independent message buffer
+* Independent control-flow stack
+
+Uncaught exceptions terminate only the offending thread (unless it is the main thread).
+
+---
+
+## Customization
+
+You may override the following macros before including the header:
+
+* `EXCEPTION_ASSERT`
+* `EXCEPTION_STATIC_ASSERT`
+* `EXCEPTION_CALLOC`
+* `EXCEPTION_FREE`
+
+This allows integration with custom allocators or assertion systems.
+
+---
+
+## Tests
+
+The repository includes a test suite located in `tests/exception_tests.c`.
+
+The tests are written using **cmocka** and validate:
+
+* Basic `throw` / `catch` behavior
+* Uncaught exception termination (process and thread)
+* Nested exception propagation and rethrow
+* Message replacement on consecutive throws
+* Multithreaded correctness
+* Thread-local isolation
+
+### Building Tests (POSIX)
+
+Example using GCC and cmocka:
 
 ```bash
-clang-format -i src/*.c include/*.h
+gcc -std=c11 -Wall -Wextra -pthread \
+    tests/exception_tests.c -lcmocka -o exception_tests
 ```
 
----
+Run:
 
-## 🤝 Contributing
+```bash
+./exception_tests
+```
 
-Contributions are welcome! To get started:
+### Building Tests (Windows / MSVC)
 
-1. **Fork the Repository**:
+Ensure cmocka is installed and available in your include/library paths.
 
-   ```bash
-   git fork https://github.com/mrpriv4te/exception-c.git
-   ```
-
-2. **Create a Branch**:
-
-   ```bash
-   git checkout -b feature/your-feature
-   ```
-
-3. **Commit Your Changes**:
-
-   ```bash
-   git commit -m "Add your feature"
-   ```
-
-4. **Push the Branch**:
-
-   ```bash
-   git push origin feature/your-feature
-   ```
-
-5. **Submit a Pull Request**.
+Compile the test file as a normal C program. `EXCEPTION_IMPLEMENTATION` is already defined inside the test file.
 
 ---
 
-## 📜 License
+## Design Notes
 
-This project is licensed under the [MIT License](LICENSE).
-
----
-
-## 🙏 Acknowledgments
-
-- Inspired by exception handling mechanisms in C++ and Python.
-- Built with thread safety and modern C practices in mind.
+* Implemented using a linked stack of `jmp_buf` frames.
+* Message memory is dynamically allocated per throw.
+* Previous message memory is freed automatically.
+* `throw(0, ...)` is forbidden (mirrors `longjmp` constraints).
 
 ---
 
-Happy coding! 🎉
+## Limitations
+
+* Not compatible with C++.
+* Does not unwind automatic storage like C++ exceptions.
+* Resources must be released manually or via structured control.
+* Relies on `setjmp` / `longjmp` semantics.
+
+---
+
+## License
+
+```
+MIT License
+
+Copyright (c) 2025 Mr. Priv4te
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
