@@ -95,17 +95,22 @@ typedef pthread_t exception_thread_id_t;
 #include <stdint.h>
 #include <stdio.h>
 
-#define try                                                              \
-    for (int _exception_try_code = exception_try(setjmp(                 \
-                 (exception_control_flow_push(&(control_flow_node_t){0}) \
-                         ->head->jmp_buf))),                             \
-             _exception_try_handled = 0, _exception_try = 1;             \
-        _exception_try; (void)exception_control_flow_pop(),              \
-             (_exception_try_code != 0 && !_exception_try_handled        \
-                     ? (exception_rethrow(),                             \
-                           exception_exit(__func__, __FILE__, __LINE__)) \
-                     : exception_cleanup()),                             \
-             _exception_try = 0)                                         \
+#define try                                                                   \
+    for (int _exception_try_code = exception_try(setjmp(                      \
+                 (exception_control_flow_push(&(control_flow_node_t){0})      \
+                         ->head->jmp_buf))),                                  \
+             _exception_try_handled = 0, _exception_try = 1;                  \
+        _exception_try &&                                                     \
+        (((_exception_try_code != 0) ? (void)exception_control_flow_pop()     \
+                                     : (void)0),                              \
+            1);                                                               \
+        (_exception_try_code == 0                                             \
+                ? (void)exception_control_flow_pop()                          \
+                : (_exception_try_handled == 0                                \
+                          ? (exception_rethrow(),                             \
+                                exception_exit(__func__, __FILE__, __LINE__)) \
+                          : exception_cleanup())),                            \
+             _exception_try = 0)                                              \
         if (_exception_try_code == 0)
 
 #define catch(code) else if ((_exception_try_handled = exception_catch(code)))

@@ -150,12 +150,19 @@ void test_message_update(void **state)
     (void)state;
 
     try {
-        throw(3, "First exception");
-    } catch (3) {
-        assert_string_equal(exception()->message, "First exception");
-        throw(4, "Second exception");
-    } catch (4) {
+        try {
+            throw(1, "First exception");
+        } catch (1) {
+            assert_string_equal(exception()->message, "First exception");
+            throw(2, "Second exception");
+        }
+    } catch (2) {
         assert_string_equal(exception()->message, "Second exception");
+        try {
+            throw(3, "Third exception");
+        } catch (3) {
+            assert_string_equal(exception()->message, "Third exception");
+        }
     }
 }
 
